@@ -1,0 +1,103 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #f4f5f7;
+  color: #1f2933;
+  font-size: 14px;
+}
+header {
+  background: #1f3a5f;
+  color: #fff;
+  padding: 16px 24px;
+}
+header h1 { margin: 0 0 4px; font-size: 20px; }
+header .meta { font-size: 12px; opacity: .85; }
+main { max-width: 1200px; margin: 20px auto; padding: 0 16px; }
+.card {
+  background: #fff;
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 18px;
+}
+.card h2 { margin: 0 0 10px; font-size: 16px; }
+.card h3 { font-size: 14px; margin: 16px 0 6px; }
+.hint { color: #6b7280; font-size: 12.5px; line-height: 1.7; margin: 4px 0 12px; }
+.hint code, .result code, td code { background: #f0f1f3; padding: 1px 5px; border-radius: 3px; }
+
+form label { display: block; margin: 8px 0; font-weight: 600; }
+form input, form textarea {
+  display: block; width: 100%; margin-top: 4px;
+  padding: 7px 9px; border: 1px solid #cbd2d9; border-radius: 5px;
+  font: inherit; font-weight: 400;
+}
+.label-rows-head { display: flex; justify-content: space-between; align-items: center; margin: 14px 0 6px; font-weight: 600; }
+.row-btns button { margin-left: 8px; }
+.label-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 22px;
+  gap: 8px;
+  margin-bottom: 6px;
+  align-items: center;
+}
+.label-row .len { font-size: 11px; color: #6b7280; text-align: right; }
+.label-row .len.over { color: #c0392b; font-weight: 700; }
+.form-actions { margin-top: 12px; display: flex; align-items: center; gap: 12px; }
+
+button {
+  background: #fff; border: 1px solid #9aa5b1; border-radius: 5px;
+  padding: 6px 12px; cursor: pointer; font: inherit;
+}
+button:hover { background: #f0f4f8; }
+button.primary { background: #1f3a5f; color: #fff; border-color: #1f3a5f; }
+button.primary:hover { background: #2c5080; }
+button.danger { color: #c0392b; border-color: #d98c83; }
+button.tiny { padding: 3px 8px; font-size: 12px; }
+
+.result { font-size: 13px; }
+.result.ok { color: #1e7d46; }
+.result.err { color: #c0392b; }
+
+table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+th, td {
+  text-align: left; padding: 7px 8px; border-bottom: 1px solid #eef0f2;
+  vertical-align: top; font-size: 13px;
+}
+th { font-size: 12px; color: #52606d; background: #fafbfc; position: sticky; top: 0; }
+tr.selected { background: #eef4fb; }
+
+.card-head { display: flex; justify-content: space-between; align-items: center; }
+.auto { font-weight: 400; font-size: 12.5px; margin-right: 10px; }
+
+.detail { margin-top: 14px; border-top: 1px dashed #d4d9de; padding-top: 12px; }
+.detail.hidden, .hidden { display: none; }
+
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 12px; white-space: nowrap;
+}
+.badge.pending     { background: #e8ecf1; color: #485664; }
+.badge.checking    { background: #fff2d6; color: #9a6700; }
+.badge.printed     { background: #d7f0e2; color: #1e7d46; }
+.badge.not_printed { background: #f7deda; color: #a33a2e; }
+.badge.batch-pending   { background: #e8ecf1; color: #485664; }
+.badge.batch-printing  { background: #fff2d6; color: #9a6700; }
+.badge.batch-printed   { background: #d7f0e2; color: #1e7d46; }
+.badge.batch-partially_printed_cancelled,
+.badge.batch-cancelled { background: #f7deda; color: #a33a2e; }
+.badge.batch-printing_partial { background: #e3edfa; color: #2c5080; }
+.badge.batch-partial { background: #e3edfa; color: #2c5080; }
+
+.fault-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.fault-form label { flex: 0 0 260px; margin: 0; }
+.fault-form button { margin-bottom: 1px; }
+#fault-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.fault-item {
+  border: 1px solid #e2c98c; background: #fffaf0; border-radius: 6px;
+  padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;
+}
+.events { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+  max-height: 220px; overflow: auto; background: #fafbfc; border: 1px solid #eef0f2;
+  border-radius: 6px; padding: 8px; }
+.events div { padding: 1px 0; color: #485664; }

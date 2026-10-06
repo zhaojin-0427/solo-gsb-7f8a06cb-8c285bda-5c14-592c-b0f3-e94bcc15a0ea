@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本地标签打印排程</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>本地标签打印排程台</h1>
+  <div class="meta">控制端 <code>:8000</code> · 两个独立 worker · 本地打印机模拟器（不接真实打印机）</div>
+</header>
+
+<main>
+  <section class="card" id="submit-card">
+    <h2>① 提交批次</h2>
+    <p class="hint">请求键相同且内容相同 → 返回原批次；内容不同 → 409 冲突。序号唯一，正文为 1~80 个可打印 ASCII 字符。</p>
+    <form id="batch-form">
+      <label>请求键
+        <input type="text" id="request-key" maxlength="200" required placeholder="例如 ORDER-20261006-001">
+      </label>
+      <div class="label-rows-head">
+        <span>标签（1～8 张，顺序固定按序号升序）</span>
+        <span class="row-btns">
+          <button type="button" id="add-row">+ 增加标签</button>
+          <button type="button" id="del-row">− 减少</button>
+        </span>
+      </div>
+      <div id="label-rows"></div>
+      <div class="form-actions">
+        <button type="submit" class="primary">提交批次</button>
+        <span id="submit-result" class="result"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="card" id="batches-card">
+    <div class="card-head">
+      <h2>② 批次与标签状态</h2>
+      <div>
+        <label class="auto"><input type="checkbox" id="auto-refresh" checked> 2 秒自动刷新</label>
+        <button id="refresh-btn">刷新</button>
+      </div>
+    </div>
+    <table id="batch-table">
+      <thead>
+        <tr><th>批次 ID</th><th>请求键</th><th>批次状态</th>
+        <th>待派发</th><th>待核对</th><th>已出纸</th><th>未出纸</th>
+        <th>当前 worker / 租约</th><th>创建时间</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div id="batch-detail" class="detail hidden"></div>
+  </section>
+
+  <section class="card" id="fault-card">
+    <h2>③ 打印机故障开关（模拟器）</h2>
+    <p class="hint">
+      <b>首次丢响应</b>：指定标签<b>记账后第一次</b>响应丢失（须在该标签出纸前打开），worker 凭操作键找回回执，不会重复出纸。<br>
+      <b>暂停回执</b>：记账后扣留回执，直到点“释放”，期间 worker 租约可过期并被另一个 worker 接管核对。
+    </p>
+    <form id="fault-form" class="fault-form">
+      <label>批次 ID <input type="text" id="fault-batch" required placeholder="选择批次后自动带入"></label>
+      <label>序号 <input type="number" id="fault-seq" min="1" required></label>
+      <button type="submit" name="mode" value="lose_once">打开：首次丢响应</button>
+      <button type="submit" name="mode" value="pause">打开：暂停回执</button>
+    </form>
+    <div id="fault-list"></div>
+  </section>
+
+  <section class="card" id="ledger-card">
+    <div class="card-head">
+      <h2>④ 打印机出纸账本</h2>
+      <button id="ledger-refresh">查询账本</button>
+    </div>
+    <p class="hint">账本只追加、不可变；以 <code>&lt;批次ID&gt;-&lt;序号&gt;</code> 为操作键，正文与回执原子记入。</p>
+    <table id="ledger-table">
+      <thead>
+        <tr><th>操作键</th><th>批次</th><th>序号</th><th>正文</th><th>回执 ID</th><th>记账时间</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <h3>故障/恢复事件</h3>
+    <div id="fault-events" class="events"></div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
