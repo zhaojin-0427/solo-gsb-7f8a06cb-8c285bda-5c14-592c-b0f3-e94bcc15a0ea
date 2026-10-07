@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本地标签打印排程</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #fff; --line: #d9dce1; --ink: #1f2430;
+    --muted: #6b7280; --accent: #2563eb;
+    --pending: #9ca3af; --leased: #d97706; --printed: #16a34a;
+    --absent: #6b7280; --cancelled: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+         background: var(--bg); color: var(--ink); font-size: 14px; }
+  header { background: #111827; color: #fff; padding: 14px 24px; display: flex;
+           align-items: center; gap: 16px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .meta { color: #9ca3af; font-size: 12px; }
+  main { max-width: 1180px; margin: 20px auto; padding: 0 16px; display: grid;
+         grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+          padding: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 15px; }
+  .span2 { grid-column: 1 / -1; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+  input, textarea { width: 100%; padding: 7px 9px; border: 1px solid var(--line);
+                    border-radius: 6px; font: inherit; font-family: ui-monospace, monospace; }
+  textarea { min-height: 130px; resize: vertical; }
+  button { cursor: pointer; border: 1px solid var(--line); background: #fff;
+           padding: 6px 12px; border-radius: 6px; font: inherit; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--cancelled); border-color: #f1b4b4; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; line-height: 1.6; }
+  .msg { margin-top: 10px; padding: 8px 10px; border-radius: 6px; font-size: 13px;
+         white-space: pre-wrap; display: none; }
+  .msg.ok { display: block; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+  .msg.err { display: block; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line);
+           vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  td.mono, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  .batch { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 14px;
+           overflow: hidden; }
+  .batch header { display: block; background: #fafbfc; color: var(--ink);
+                  padding: 10px 14px; }
+  .batch-title { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .batch-title .bid { font-family: ui-monospace, monospace; font-weight: 700; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 999px;
+           font-size: 11px; font-weight: 600; color: #fff; }
+  .badge.active { background: var(--accent); }
+  .badge.cancelled { background: var(--cancelled); }
+  .badge.pending { background: var(--pending); }
+  .badge.leased { background: var(--leased); }
+  .badge.printed { background: var(--printed); }
+  .badge.absent { background: var(--absent); }
+  .badge.held { background: #7c3aed; }
+  .mini { padding: 2px 7px; font-size: 11px; }
+  .err-text { color: var(--cancelled); font-size: 11px; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .pill { font-size: 11px; color: var(--muted); }
+  pre.json { background: #0f172a; color: #d1e0ff; padding: 10px; border-radius: 6px;
+             overflow: auto; max-height: 340px; font-size: 11px; margin: 0; }
+  .legend span { margin-right: 14px; font-size: 12px; color: var(--muted); }
+  .fault-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .fault-row input { flex: 1; min-width: 220px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏷️ 本地标签打印排程</h1>
+  <span class="meta">控制端 :8000 · 打印机模拟器 :8001 · 两个独立 worker · 数据持久化到 ./data</span>
+</header>
+
+<main>
+  <!-- submit -->
+  <section class="card">
+    <h2>1. 提交批次（1–8 张，顺序固定）</h2>
+    <label for="reqKey">请求键（同键同内容幂等，异内容冲突）</label>
+    <input id="reqKey" placeholder="例如 order-2026-001">
+    <label for="labelsText">标签：每行 <code>序号|正文</code>（正文为 1–80 个可打印 ASCII 字符）</label>
+    <textarea id="labelsText" placeholder="1|HELLO LABEL 01&#10;2|HELLO LABEL 02&#10;3|HELLO LABEL 03"></textarea>
+    <div class="hint">序号必须唯一；空批次、无效字符、重复序号整单拒绝。提交后批次不可变。</div>
+    <div style="margin-top:10px"><button class="primary" id="submitBtn">提交批次</button></div>
+    <div class="msg" id="submitMsg"></div>
+  </section>
+
+  <!-- faults -->
+  <section class="card">
+    <h2>2. 打印机故障开关（按操作键）</h2>
+    <div class="fault-row">
+      <input id="faultOpKey" placeholder="操作键，例如 B-xxxx#L2">
+      <button id="armDrop">设为「记账后首次丢响应」</button>
+      <button id="armPause">设为「记账后暂停回执」</button>
+    </div>
+    <div class="hint">
+      操作键形如 <code>B-xxxx#L2</code>；也可在<b>提交批次前</b>用请求键别名预设：<code>请求键#L序号</code>（如 <code>order-1#L1</code>），首次出纸时自动绑定。暂停的回执点「释放回执」后，worker 凭原操作键找回，不会重复出纸。
+    </div>
+    <table>
+      <thead><tr><th>操作键</th><th>模式</th><th>状态</th><th></th></tr></thead>
+      <tbody id="faultsBody"><tr><td colspan="4" class="hint">无故障</td></tr></tbody>
+    </table>
+  </section>
+
+  <!-- batches -->
+  <section class="card span2">
+    <div class="toolbar" style="justify-content:space-between">
+      <h2 style="margin:0">3. 批次与标签状态</h2>
+      <div class="toolbar">
+        <span class="legend">
+          <span><i class="badge pending">待派发</i></span>
+          <span><i class="badge leased">待核对</i></span>
+          <span><i class="badge printed">已出纸</i></span>
+          <span><i class="badge absent">未出纸</i></span>
+        </span>
+        <button id="refreshBtn">刷新</button>
+        <label style="margin:0;display:flex;align-items:center;gap:4px">
+          <input type="checkbox" id="autoRefresh" checked style="width:auto"> 自动 1.5s
+        </label>
+      </div>
+    </div>
+    <div id="batches"></div>
+  </section>
+
+  <!-- ledger -->
+  <section class="card span2">
+    <div class="toolbar" style="justify-content:space-between">
+      <h2 style="margin:0">4. 打印机出纸账本（打印机模拟器，端口 8001）</h2>
+      <button id="ledgerBtn">查询账本</button>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>操作键</th><th>正文</th><th>回执 ID</th><th>记账时间</th><th>暂停中</th></tr></thead>
+      <tbody id="ledgerBody"><tr><td colspan="6" class="hint">点击“查询账本”</td></tr></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+const CONTROL = location.origin;
+const PRINTER = `http://${location.hostname}:8001`;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtTime = (t) => t ? new Date(t * 1000).toLocaleTimeString("zh-CN", {hour12:false}) : "";
+
+function showMsg(el, text, ok) {
+  el.textContent = text;
+  el.className = "msg " + (ok ? "ok" : "err");
+}
+
+const LABEL_STATUS = {
+  pending: ["待派发", "pending"],
+  leased:  ["待核对", "leased"],
+  printed: ["已出纸", "printed"],
+  absent:  ["未出纸", "absent"],
+};
+
+// ------------------------------------------------------------- submit batch
+
+$("submitBtn").onclick = async () => {
+  const request_key = $("reqKey").value.trim();
+  const lines = $("labelsText").value.split("\n").map(s => s.trim()).filter(Boolean);
+  const labels = [];
+  for (const line of lines) {
+    const bar = line.indexOf("|");
+    if (bar < 0) { showMsg($("submitMsg"), `格式错误: ${line}\n应为 序号|正文`, false); return; }
+    const seq = Number(line.slice(0, bar).trim());
+    const text = line.slice(bar + 1);
+    if (!Number.isInteger(seq) || seq < 1) {
+      showMsg($("submitMsg"), `序号必须是正整数: ${line}`, false); return;
+    }
+    labels.push({ seq, text });
+  }
+  if (!request_key) { showMsg($("submitMsg"), "请填写请求键", false); return; }
+  if (labels.length === 0) { showMsg($("submitMsg"), "空批次被拒绝：至少 1 张标签", false); return; }
+  if (labels.length > 8) { showMsg($("submitMsg"), "每批最多 8 张", false); return; }
+
+  try {
+    const resp = await fetch(`${CONTROL}/api/batches`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ request_key, labels }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      showMsg($("submitMsg"), `HTTP ${resp.status} ${JSON.stringify(data.detail ?? data, null, 2)}`, false);
+      return;
+    }
+    showMsg($("submitMsg"),
+      (data.reused ? "幂等命中，返回原批次 " : "已创建批次 ") + data.batch.id, true);
+    await refreshBatches();
+  } catch (e) {
+    showMsg($("submitMsg"), "请求失败: " + e, false);
+  }
+};
+
+// ------------------------------------------------------------- batches
+
+async function refreshBatches() {
+  try {
+    const resp = await fetch(`${CONTROL}/api/batches`);
+    const data = await resp.json();
+    renderBatches(data.batches ?? []);
+  } catch (e) {
+    $("batches").innerHTML = `<div class="msg err">控制端不可达：${esc(e.message)}</div>`;
+  }
+}
+
+function renderBatches(batches) {
+  if (!batches.length) {
+    $("batches").innerHTML = `<div class="hint">暂无批次。先在上方提交一个。</div>`;
+    return;
+  }
+  $("batches").innerHTML = batches.map(b => {
+    const rows = b.labels.map(l => {
+      const [cn, cls] = LABEL_STATUS[l.status] ?? [l.status, "pending"];
+      const leaseInfo = l.status === "leased"
+        ? `<div class="pill">租约: ${esc(l.leased_by)} · 剩 ${l.lease_remaining ?? "?"}s · 第 ${l.attempts} 次</div>` : "";
+      const errInfo = l.last_error ? `<div class="err-text">${esc(l.last_error)}</div>` : "";
+      const receipt = l.receipt_id ? `<div class="pill mono">${esc(l.receipt_id)}</div>` : "";
+      return `<tr>
+        <td class="mono">${l.seq}</td>
+        <td class="mono">${esc(l.text)}</td>
+        <td><span class="badge ${cls}">${cn}</span>${leaseInfo}${receipt}${errInfo}</td>
+        <td class="mono">${esc(l.op_key)}<div class="pill">${fmtTime(l.dispatched_at) ? "派发 "+fmtTime(l.dispatched_at) : ""}</div></td>
+        <td>
+          <button class="mini" onclick="armFault('${esc(l.op_key)}','drop_once')">丢响应</button>
+          <button class="mini" onclick="armFault('${esc(l.op_key)}','pause')">暂停</button>
+        </td>
+      </tr>`;
+    }).join("");
+    const cancelBtn = b.status === "active"
+      ? `<button class="danger mini" onclick="cancelBatch('${esc(b.id)}')">取消批次</button>` : "";
+    return `<div class="batch">
+      <header>
+        <div class="batch-title">
+          <span class="bid">${esc(b.id)}</span>
+          <span class="badge ${b.status}">${b.status === "active" ? "进行中" : "已取消"}</span>
+          <span class="pill">请求键: ${esc(b.request_key)}</span>
+          <span class="pill">标签 ${b.label_count} 张</span>
+          <span class="pill">创建 ${fmtTime(b.created_at)}${b.cancelled_at ? " · 取消 " + fmtTime(b.cancelled_at) : ""}</span>
+          <span style="flex:1"></span>${cancelBtn}
+        </div>
+      </header>
+      <table>
+        <thead><tr><th>序号</th><th>正文</th><th>状态</th><th>操作键</th><th>故障预设</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join("");
+}
+
+async function cancelBatch(id) {
+  if (!confirm(`确认取消批次 ${id}？\n已派发而回执未明的标签将保留“待核对”，按打印机账本核对。`)) return;
+  const resp = await fetch(`${CONTROL}/api/batches/${encodeURIComponent(id)}/cancel`, {method: "POST"});
+  if (!resp.ok) { alert("取消失败: " + resp.status); return; }
+  await refreshBatches();
+}
+window.cancelBatch = cancelBatch;
+
+// ------------------------------------------------------------- faults
+
+async function armFault(mode, opKeyArg) {
+  const op_key = (opKeyArg ?? $("faultOpKey").value).trim();
+  if (!op_key) { alert("先填写操作键（形如 B-xxxx#L2），或点批次内标签的按钮"); return; }
+  try {
+    const resp = await fetch(`${PRINTER}/faults`, {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ op_key, mode }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { alert(`设置失败 HTTP ${resp.status}: ${JSON.stringify(data.detail ?? data)}`); }
+    $("faultOpKey").value = op_key;
+    await refreshFaults();
+  } catch (e) { alert("打印机不可达: " + e.message); }
+}
+$("armDrop").onclick = () => armFault("drop_once");
+$("armPause").onclick = () => armFault("pause");
+window.armFault = armFault;
+
+async function refreshFaults() {
+  let faults = [];
+  try {
+    const resp = await fetch(`${PRINTER}/faults`);
+    if (resp.ok) faults = (await resp.json()).faults ?? [];
+  } catch (e) { /* printer down */ }
+  const body = $("faultsBody");
+  if (!faults.length) { body.innerHTML = `<tr><td colspan="4" class="hint">无故障</td></tr>`; return; }
+  body.innerHTML = faults.map(f => {
+    const state = f.held ? `<span class="badge held">回执暂停中</span>`
+      : f.consumed ? `<span class="badge printed">已触发</span>`
+      : `<span class="badge pending">待命</span>`;
+    const action = f.mode === "pause" && f.held
+      ? `<button class="mini" onclick="releaseFault('${encodeURIComponent(f.op_key)}')">释放回执</button>`
+      : (!f.consumed && !f.held ? `<button class="mini danger" onclick="deleteFault('${encodeURIComponent(f.op_key)}')">撤防</button>` : "");
+    return `<tr>
+      <td class="mono">${esc(f.op_key)}</td>
+      <td>${f.mode === "drop_once" ? "首次丢响应" : "暂停回执"}</td>
+      <td>${state}</td><td>${action}</td></tr>`;
+  }).join("");
+}
+
+async function releaseFault(opKey) {
+  opKey = decodeURIComponent(opKey);
+  await fetch(`${PRINTER}/faults/${encodeURIComponent(opKey)}/release`, {method: "POST"});
+  await refreshFaults();
+}
+window.releaseFault = releaseFault;
+
+async function deleteFault(opKey) {
+  opKey = decodeURIComponent(opKey);
+  const resp = await fetch(`${PRINTER}/faults/${encodeURIComponent(opKey)}`, {method: "DELETE"});
+  if (!resp.ok) { const d = await resp.json().catch(() => ({})); alert("撤防失败: " + JSON.stringify(d.detail ?? resp.status)); }
+  await refreshFaults();
+}
+window.deleteFault = deleteFault;
+
+// ------------------------------------------------------------- ledger
+
+async function refreshLedger() {
+  try {
+    const resp = await fetch(`${PRINTER}/ledger`);
+    if (!resp.ok) throw new Error(resp.status);
+    const entries = (await resp.json()).entries ?? [];
+    $("ledgerBody").innerHTML = entries.length ? entries.map(e => `
+      <tr>
+        <td>${e.id}</td>
+        <td class="mono">${esc(e.op_key)}</td>
+        <td class="mono">${esc(e.text)}</td>
+        <td class="mono">${esc(e.receipt_id)}</td>
+        <td>${fmtTime(e.printed_at)}</td>
+        <td>${e.held ? `<span class="badge held">暂停中</span>` : ""}</td>
+      </tr>`).join("")
+      : `<tr><td colspan="6" class="hint">账本为空</td></tr>`;
+  } catch (e) {
+    $("ledgerBody").innerHTML = `<tr><td colspan="6" class="err-text">打印机不可达：${esc(e.message)}</td></tr>`;
+  }
+}
+$("ledgerBtn").onclick = refreshLedger;
+$("refreshBtn").onclick = refreshBatches;
+
+// ------------------------------------------------------------- polling loop
+
+async function tick() {
+  await refreshBatches();
+  await refreshFaults();
+}
+setInterval(() => { if ($("autoRefresh").checked) tick(); }, 1500);
+setInterval(() => { refreshLedger(); }, 3000);
+tick();
+</script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+services:
+  control:
+    build: .
+    command: ["python", "-m", "app.runner", "control"]
+    environment:
+      CONTROL_DB: /data/control.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/control:/data
+    restart: unless-stopped
+
+  printer:
+    build: .
+    command: ["python", "-m", "app.runner", "printer"]
+    environment:
+      PRINTER_DB: /data/printer.db
+      PRINTER_DROP_DELAY: "3"
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./data/printer:/data
+    restart: unless-stopped
+
+  worker-1:
+    build: .
+    command: ["python", "-m", "app.runner", "worker"]
+    environment:
+      WORKER_ID: worker-1
+      WORKER_DB: /data/worker.db
+      CONTROL_URL: http://control:8000
+      PRINTER_URL: http://printer:8001
+      LEASE_TTL: "20"
+      FAULT_GRACE: "2"
+    depends_on:
+      - control
+      - printer
+    volumes:
+      - ./data/worker-1:/data
+    restart: unless-stopped
+
+  worker-2:
+    build: .
+    command: ["python", "-m", "app.runner", "worker"]
+    environment:
+      WORKER_ID: worker-2
+      WORKER_DB: /data/worker.db
+      CONTROL_URL: http://control:8000
+      PRINTER_URL: http://printer:8001
+      LEASE_TTL: "20"
+      FAULT_GRACE: "2"
+    depends_on:
+      - control
+      - printer
+    volumes:
+      - ./data/worker-2:/data
+    restart: unless-stopped
